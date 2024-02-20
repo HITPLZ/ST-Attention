@@ -1,7 +1,26 @@
 import torch.nn as nn
 import torch
+import numpy as np
+from .mlp import MultiLayerPerceptron
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+
+
+
+class GraphMLP(nn.Module):
+    def __init__(self, input_dim, hidden_dim, dropout=0.2):
+        super().__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.act_fn = nn.ReLU()
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.act_fn(x)
+        x = self.dropout(x)
+        return x + self.fc2(x)
 
 
 # class PositionalEncoding(nn.Module):
@@ -61,7 +80,7 @@ class AttentionLayer(nn.Module):
 
         self.out_proj = nn.Linear(model_dim, model_dim)
 
-    def forward(self, query, key, value):
+    def forward(self, query, key, value, ):
         # Q    (batch_size, ..., tgt_length, model_dim)
         # K, V (batch_size, ..., src_length, model_dim)
         batch_size = query.shape[0]
@@ -93,10 +112,11 @@ class AttentionLayer(nn.Module):
 
         attn_score = torch.softmax(attn_score, dim=-1)
         out = attn_score @ value  # (num_heads * batch_size, ..., tgt_length, head_dim)
+
         out = torch.cat(
             torch.split(out, batch_size, dim=0), dim=-1
         )  # (batch_size, ..., tgt_length, head_dim * num_heads = model_dim)
-
+        # torch.save(out, 'attn_score_before.pt')
         out = self.out_proj(out)
 
         return out
@@ -114,21 +134,38 @@ class SelfAttentionLayer(nn.Module):
             nn.ReLU(inplace=True),
             nn.Linear(feed_forward_dim, model_dim),
         )
+        self.argumented_linear = nn.Linear(model_dim, model_dim)
+        self.act1 = nn.GELU()
         self.ln1 = nn.LayerNorm(model_dim)
         self.ln2 = nn.LayerNorm(model_dim)
         self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
 
-    def forward(self, x, y=None, dim=-2):
+    def forward(self, x, y=None, dim=-2, c=None, bat=None, augment=True):
         x = x.transpose(dim, -2)
+        augmented = None
         # x: (batch_size, ..., length, model_dim)
-        residual = x
+        if c is not None:
+            residual = c
+        else:
+            residual = x
         if y is None:
             out = self.attn(x, x, x)  # (batch_size, ..., length, model_dim)
+            if augment is True:
+                augmented = self.act1(self.argumented_linear(residual))
+            # if bat == 1115:
+            #     torch.save(out, 'attn_score_after.pt')
         else:
+            y = y.transpose(dim, -2)
             out = self.attn(y, x, x)
+            # if bat == 1115:
+            #     torch.save(out, 'crs_attn_score_after.pt')
         out = self.dropout1(out)
-        out = self.ln1(residual + out)
+
+        if augmented is not None and augment is not False:
+            out = self.ln1(residual + out + augmented)
+        else:
+            out = self.ln1(residual + out)
 
         residual = out
         out = self.feed_forward(out)  # (batch_size, ..., length, model_dim)
@@ -139,7 +176,7 @@ class SelfAttentionLayer(nn.Module):
         return out
 
 
-class adjmx_crsAttn_funsion_04(nn.Module):
+class Normlap(nn.Module):
     """
     Paper: STAEformer: Spatio-Temporal Adaptive Embedding Makes Vanilla Transformer SOTA for Traffic Forecasting
     Link: https://arxiv.org/abs/2308.10425
@@ -149,7 +186,7 @@ class adjmx_crsAttn_funsion_04(nn.Module):
     def __init__(
             self,
             num_nodes,
-            #adj_mx,
+            adj_mx,
             in_steps,
             out_steps,
             steps_per_day,
@@ -161,16 +198,20 @@ class adjmx_crsAttn_funsion_04(nn.Module):
             dow_embedding_dim,
             time_embedding_dim,
             adaptive_embedding_dim,
+            node_dim,
             feed_forward_dim,
+            out_feed_forward_dim,
             num_heads,
             num_layers,
             num_layers_m,
             dropout,
-            use_mixed_proj
+            use_mixed_proj,
+            bat
     ):
         super().__init__()
-        #self.adj_mx = adj_mx
+        self.bat = bat
         self.num_nodes = num_nodes
+        self.adj_mx = adj_mx
         self.in_steps = in_steps
         self.out_steps = out_steps
         self.steps_per_day = steps_per_day
@@ -182,6 +223,7 @@ class adjmx_crsAttn_funsion_04(nn.Module):
         self.ts_embedding_dim = ts_embedding_dim
         self.time_embedding_dim = time_embedding_dim
         self.adaptive_embedding_dim = adaptive_embedding_dim
+        self.node_dim = node_dim
         self.model_dim = (
                 input_embedding_dim
                 + tod_embedding_dim
@@ -194,20 +236,31 @@ class adjmx_crsAttn_funsion_04(nn.Module):
         self.num_layers = num_layers
         self.use_mixed_proj = use_mixed_proj
         self.num_layers_m = num_layers_m
-        self.input_proj = nn.Linear(input_dim, input_embedding_dim)
+        if self.input_embedding_dim > 0:
+            self.input_proj = nn.Linear(input_dim, input_embedding_dim)
         if tod_embedding_dim > 0:
             self.tod_embedding = nn.Embedding(steps_per_day, tod_embedding_dim)
         if dow_embedding_dim > 0:
             self.dow_embedding = nn.Embedding(7, dow_embedding_dim)
+        if time_embedding_dim > 0:
+            self.time_embedding = nn.Embedding(7 * steps_per_day, self.time_embedding_dim)
+
         if adaptive_embedding_dim > 0:
             self.adaptive_embedding = nn.init.xavier_uniform_(
                 nn.Parameter(torch.empty(in_steps, num_nodes, adaptive_embedding_dim))
             )
-        if time_embedding_dim > 0:
-            self.time_embedding = nn.Embedding(7 * steps_per_day, self.time_embedding_dim)
+        self.adj_mx_forward_encoder = nn.Sequential(
+            GraphMLP(input_dim=self.num_nodes, hidden_dim=self.node_dim)
+        )
+
+        self.adj_mx_backward_encoder = nn.Sequential(
+            GraphMLP(input_dim=self.num_nodes, hidden_dim=self.node_dim)
+        )
+
+
         if use_mixed_proj:
             self.output_proj = nn.Linear(
-                in_steps * self.model_dim, out_steps * output_dim
+                in_steps * (self.model_dim), out_steps * output_dim
             )
         else:
             self.temporal_proj = nn.Linear(in_steps, out_steps)
@@ -227,43 +280,37 @@ class adjmx_crsAttn_funsion_04(nn.Module):
             ]
         )
         ####################
-        self.attn_layers_m1 = nn.ModuleList(
-            [
-                SelfAttentionLayer(self.model_dim, feed_forward_dim, num_heads, dropout)
-                for _ in range(num_layers_m)
-            ]
-        )
-
-        self.attn_layers_m2 = nn.ModuleList(
-            [
-                SelfAttentionLayer(self.model_dim, feed_forward_dim, num_heads, dropout)
-                for _ in range(num_layers_m)
-            ]
-        )
 
         self.attn_layers_c = nn.ModuleList(
             [
                 SelfAttentionLayer(self.model_dim, feed_forward_dim, num_heads, dropout)
             ]
         )
-
-        # Z_Concat
-        self.fusion = FusionModel(self.model_dim, self.model_dim)
-
-        # self.weight_mat=nn.init.xavier_uniform_(
-        #         nn.Parameter(torch.empty(in_steps, num_nodes, self.model_dim)))
-
+        self.attn_out = nn.ModuleList(
+            [
+                SelfAttentionLayer(self.model_dim, out_feed_forward_dim, num_heads,
+                                   dropout)
+                for _ in range(num_layers_m)
+            ]
+        )
         if self.ts_embedding_dim > 0:
             self.time_series_emb_layer = nn.Conv2d(
                 in_channels=self.input_dim * self.in_steps, out_channels=self.ts_embedding_dim, kernel_size=(1, 1),
                 bias=True)
 
-
-
+        self.fusion_model = nn.Sequential(
+            *[MultiLayerPerceptron(input_dim=self.adaptive_embedding_dim + self.node_dim,
+                                   hidden_dim=self.adaptive_embedding_dim + self.node_dim,
+                                   dropout=0.2)
+              for _ in range(2)],
+            nn.Linear(in_features=self.adaptive_embedding_dim + self.node_dim, out_features=self.adaptive_embedding_dim, bias=True)
+        )
 
     def forward(self, history_data: torch.Tensor, future_data: torch.Tensor, batch_seen: int, epoch: int, train: bool,
                 **kwargs):
         # x: (batch_size, in_steps, num_nodes, input_dim+tod+dow=3)
+        # self.bat += 1
+
         x = history_data
         batch_size, _, num_nodes, _ = x.shape
 
@@ -285,12 +332,12 @@ class adjmx_crsAttn_funsion_04(nn.Module):
                                                                       self.ts_embedding_dim)
         # B ts_embedding_dim N 1
 
-
         x = self.input_proj(x)  # (batch_size, in_steps, num_nodes, input_embedding_dim)
         features = [x]
 
         if self.ts_embedding_dim > 0:
             features.append(time_series_emb)
+
         if self.tod_embedding_dim > 0:
             tod_emb = self.tod_embedding(
                 (tod * self.steps_per_day).long()
@@ -316,19 +363,33 @@ class adjmx_crsAttn_funsion_04(nn.Module):
         spatial_x = temporal_x.clone()
 
         for index, (attn_t, attn_s) in enumerate(zip(self.attn_layers_t, self.attn_layers_s)):
-            temporal_x = attn_t(temporal_x, dim=1)
-            spatial_x = attn_s(spatial_x, dim=2)
+            temporal_x = attn_t(temporal_x, dim=1, bat=self.bat, augment=False)
+            spatial_x = attn_s(spatial_x, dim=2, augment=False)
 
         for attn in self.attn_layers_c:
-            x = attn(temporal_x, spatial_x, dim=2)
+            x = attn(temporal_x, spatial_x, dim=2, bat=self.bat, augment=False)
+        if self.node_dim > 0:
+            adp_graph = x[..., -self.adaptive_embedding_dim:]
+            x = x[..., :self.model_dim - self.adaptive_embedding_dim]
 
-        for attn in self.attn_layers_m2:
+            node_forward = self.adj_mx[0].to(device)
+            node_forward = self.adj_mx_forward_encoder(node_forward.unsqueeze(0)).expand(batch_size, self.in_steps, -1,
+                                                                                         -1)
+            graph = torch.cat([adp_graph, node_forward], dim=-1)
+            graph = self.fusion_model(graph)
+
+            x = torch.cat([x, graph], dim=-1)
+        else:
+            for attn in self.attn_out:
+                x = attn(x, dim=2)
+
+        for attn in self.attn_out:
             x = attn(x, dim=2)
 
         if self.use_mixed_proj:
             out = x.transpose(1, 2)  # (batch_size, num_nodes, in_steps, model_dim)
             out = out.reshape(
-                batch_size, self.num_nodes, self.in_steps * self.model_dim
+                batch_size, self.num_nodes, self.in_steps * (self.model_dim)
             )
             out = self.output_proj(out).view(
                 batch_size, self.num_nodes, self.out_steps, self.output_dim
@@ -342,5 +403,5 @@ class adjmx_crsAttn_funsion_04(nn.Module):
             out = self.output_proj(
                 out.transpose(1, 3)
             )  # (batch_size, out_steps, num_nodes, output_dim)
-
+        # if self.bat == 1115: self.bat = 0
         return out

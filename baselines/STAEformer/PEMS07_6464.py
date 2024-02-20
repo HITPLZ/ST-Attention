@@ -19,7 +19,7 @@ CFG = EasyDict()
 CFG.DESCRIPTION = "STAEformer model configuration"
 CFG.RUNNER = SimpleTimeSeriesForecastingRunner
 CFG.DATASET_CLS = TimeSeriesForecastingDataset
-CFG.DATASET_NAME = "PEMS03"
+CFG.DATASET_NAME = "PEMS07"
 CFG.DATASET_TYPE = "Traffic flow"
 CFG.DATASET_INPUT_LEN = 12
 CFG.DATASET_OUTPUT_LEN = 12
@@ -35,10 +35,10 @@ CFG.ENV.CUDNN.ENABLED = True
 # ================= model ================= #
 CFG.MODEL = EasyDict()
 CFG.MODEL.ARCH = PureProject11
-CFG.MODEL.NAME = "03_64adp_64node"
+CFG.MODEL.NAME = "07_64adp_64node_PureProject11"
 adj_mx, _ = load_adj("datasets/" + CFG.DATASET_NAME + "/adj_mx.pkl", "doubletransition")
 CFG.MODEL.PARAM = {
-     "num_nodes" : 358,
+    "num_nodes" : 883,
     "adj_mx": [torch.tensor(i) for i in adj_mx],
     'in_steps': 12,
     'out_steps': 12,
@@ -50,8 +50,8 @@ CFG.MODEL.PARAM = {
     'ts_embedding_dim': 28,
     'dow_embedding_dim': 24,
     'time_embedding_dim': 0,
-    'adaptive_embedding_dim': 108,
-    'node_dim': 52,
+    'adaptive_embedding_dim': 64,
+    'node_dim': 64,
     'feed_forward_dim': 256,
     'out_feed_forward_dim': 256,
     'num_heads': 4,
@@ -94,7 +94,7 @@ CFG.TRAIN.DATA = EasyDict()
 # read data
 CFG.TRAIN.DATA.DIR = "datasets/" + CFG.DATASET_NAME
 # dataloader args, optional
-CFG.TRAIN.DATA.BATCH_SIZE = 16
+CFG.TRAIN.DATA.BATCH_SIZE = 8
 CFG.TRAIN.DATA.PREFETCH = False
 CFG.TRAIN.DATA.SHUFFLE = True
 CFG.TRAIN.DATA.NUM_WORKERS = 2
@@ -108,7 +108,7 @@ CFG.VAL.DATA = EasyDict()
 # read data
 CFG.VAL.DATA.DIR = "datasets/" + CFG.DATASET_NAME
 # dataloader args, optional
-CFG.VAL.DATA.BATCH_SIZE = 16
+CFG.VAL.DATA.BATCH_SIZE = 8
 CFG.VAL.DATA.PREFETCH = False
 CFG.VAL.DATA.SHUFFLE = False
 CFG.VAL.DATA.NUM_WORKERS = 2
@@ -122,7 +122,7 @@ CFG.TEST.DATA = EasyDict()
 # read data
 CFG.TEST.DATA.DIR = "datasets/" + CFG.DATASET_NAME
 # dataloader args, optional
-CFG.TEST.DATA.BATCH_SIZE = 16
+CFG.TEST.DATA.BATCH_SIZE = 8
 CFG.TEST.DATA.PREFETCH = False
 CFG.TEST.DATA.SHUFFLE = False
 CFG.TEST.DATA.NUM_WORKERS = 2

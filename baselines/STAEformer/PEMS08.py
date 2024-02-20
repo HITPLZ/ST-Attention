@@ -11,7 +11,11 @@ from basicts.losses import masked_mae
 from basicts.utils import load_adj
 
 from .arch import adjmx_crsAttn_funsion_04
-
+from .arch import PureProject
+from .arch import PureProject11
+from .arch import Normlap
+from .arch import PureProject11
+from .arch import NnEmbeddingFunction
 CFG = EasyDict()
 
 # ================= general ================= #
@@ -33,13 +37,13 @@ CFG.ENV.CUDNN.ENABLED = True
 
 # ================= model ================= #
 CFG.MODEL = EasyDict()
-CFG.MODEL.NAME = "08_104adp_spatialQuery"
-CFG.MODEL.ARCH = adjmx_crsAttn_funsion_04
-adj_mx, _ = load_adj("datasets/" + CFG.DATASET_NAME + "/adj_mx.pkl", "normlap")
-adj_mx = torch.Tensor(adj_mx[0])
+CFG.MODEL.NAME = "08_72adp_64node_nodeoutput"
+CFG.MODEL.ARCH = NnEmbeddingFunction
+adj_mx, _ = load_adj("datasets/" + CFG.DATASET_NAME + "/adj_mx.pkl", "doubletransition")
+
 CFG.MODEL.PARAM = {
     "num_nodes" : 170,
-    #"adj_mx": [torch.tensor(i) for i in adj_mx],
+    "adj_mx": [torch.tensor(i) for i in adj_mx],
     'in_steps': 12,
     'out_steps': 12,
     'steps_per_day': 288,
@@ -49,13 +53,14 @@ CFG.MODEL.PARAM = {
     'tod_embedding_dim': 24,
     'ts_embedding_dim': 28,
     'dow_embedding_dim': 24,
-    'adaptive_embedding_dim': 104,
-    'graph_proj_dim': 0,
-    'graph_proj_hidden_dim': 200,
+    'time_embedding_dim': 0,
+    'adaptive_embedding_dim': 72,
+    'node_dim': 64,
     'feed_forward_dim': 256,
+    'out_feed_forward_dim': 256,
     'num_heads': 4,
     'num_layers': 2,
-    'num_layers_m': 2,
+    'num_layers_m': 1,
     'dropout': 0.1,
     'use_mixed_proj': True,
     'bat': 0
@@ -83,7 +88,7 @@ CFG.TRAIN.LR_SCHEDULER.PARAM = {
 # CFG.TRAIN.CLIP_GRAD_PARAM = {
 #     "max_norm": 5.0
 # }
-CFG.TRAIN.NUM_EPOCHS = 70
+CFG.TRAIN.NUM_EPOCHS = 80
 CFG.TRAIN.CKPT_SAVE_DIR = os.path.join(
     "checkpoints",
     "_".join([CFG.MODEL.NAME, str(CFG.TRAIN.NUM_EPOCHS)])

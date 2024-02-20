@@ -13,6 +13,7 @@ from basicts.utils import load_adj
 from .arch import adjmx_crsAttn_funsion_04
 from .arch import PureProject
 from .arch import PureProject11
+from .arch import Normlap
 CFG = EasyDict()
 
 # ================= general ================= #
@@ -34,9 +35,9 @@ CFG.ENV.CUDNN.ENABLED = True
 
 # ================= model ================= #
 CFG.MODEL = EasyDict()
-CFG.MODEL.ARCH = PureProject11
-CFG.MODEL.NAME = "03_64adp_64node"
-adj_mx, _ = load_adj("datasets/" + CFG.DATASET_NAME + "/adj_mx.pkl", "doubletransition")
+CFG.MODEL.ARCH = Normlap
+CFG.MODEL.NAME = "03_Normlap"
+adj_mx, _ = load_adj("datasets/" + CFG.DATASET_NAME + "/adj_mx.pkl", "normlap")
 CFG.MODEL.PARAM = {
      "num_nodes" : 358,
     "adj_mx": [torch.tensor(i) for i in adj_mx],
@@ -50,8 +51,8 @@ CFG.MODEL.PARAM = {
     'ts_embedding_dim': 28,
     'dow_embedding_dim': 24,
     'time_embedding_dim': 0,
-    'adaptive_embedding_dim': 108,
-    'node_dim': 52,
+    'adaptive_embedding_dim': 64,
+    'node_dim': 64,
     'feed_forward_dim': 256,
     'out_feed_forward_dim': 256,
     'num_heads': 4,

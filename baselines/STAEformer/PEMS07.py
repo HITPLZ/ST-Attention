@@ -10,16 +10,9 @@ from basicts.data import TimeSeriesForecastingDataset
 from basicts.losses import masked_mae
 from basicts.utils import load_adj
 
-from .arch import STAEformer
-from .arch import STAEformer_funsion_04
-from .arch import STAEformer_MLP_CroAttn
-from .arch import adj_mx_STAEformer_funsion_04
 from .arch import adjmx_crsAttn_funsion_04
-from .arch import explicit_funsion_04
-from .arch import conv_parallel_fusion
-from .arch import explicit_series_24ts_funsion_04
-from .arch import flow_only_funsion_04
-from .arch import tsCros_funsion_04
+from .arch import PureProject
+from .arch import PureProject11
 CFG = EasyDict()
 
 # ================= general ================= #
@@ -41,12 +34,32 @@ CFG.ENV.CUDNN.ENABLED = True
 
 # ================= model ================= #
 CFG.MODEL = EasyDict()
-CFG.MODEL.ARCH = adjmx_crsAttn_funsion_04
-CFG.MODEL.NAME = "07_148adp"
+CFG.MODEL.ARCH = PureProject11
+CFG.MODEL.NAME = "07_72adp_64node_PureProject11"
 adj_mx, _ = load_adj("datasets/" + CFG.DATASET_NAME + "/adj_mx.pkl", "doubletransition")
 CFG.MODEL.PARAM = {
     "num_nodes" : 883,
-    #"adj_mx": [torch.tensor(i) for i in adj_mx],
+    "adj_mx": [torch.tensor(i) for i in adj_mx],
+    'in_steps': 12,
+    'out_steps': 12,
+    'steps_per_day': 288,
+    'input_dim': 3,
+    'output_dim': 1,
+    'input_embedding_dim': 24,
+    'tod_embedding_dim': 24,
+    'ts_embedding_dim': 28,
+    'dow_embedding_dim': 24,
+    'time_embedding_dim': 0,
+    'adaptive_embedding_dim': 72,
+    'node_dim': 64,
+    'feed_forward_dim': 256,
+    'out_feed_forward_dim': 256,
+    'num_heads': 4,
+    'num_layers': 2,
+    'num_layers_m': 1,
+    'dropout': 0.1,
+    'use_mixed_proj': True,
+    'bat': 0
 }
 CFG.MODEL.FORWARD_FEATURES = [0,1,2]
 CFG.MODEL.TARGET_FEATURES = [0]
@@ -71,7 +84,7 @@ CFG.TRAIN.LR_SCHEDULER.PARAM = {
 # CFG.TRAIN.CLIP_GRAD_PARAM = {
 #     "max_norm": 5.0
 # }
-CFG.TRAIN.NUM_EPOCHS = 70
+CFG.TRAIN.NUM_EPOCHS = 80
 CFG.TRAIN.CKPT_SAVE_DIR = os.path.join(
     "checkpoints",
     "_".join([CFG.MODEL.NAME, str(CFG.TRAIN.NUM_EPOCHS)])
@@ -81,7 +94,7 @@ CFG.TRAIN.DATA = EasyDict()
 # read data
 CFG.TRAIN.DATA.DIR = "datasets/" + CFG.DATASET_NAME
 # dataloader args, optional
-CFG.TRAIN.DATA.BATCH_SIZE = 16
+CFG.TRAIN.DATA.BATCH_SIZE = 8
 CFG.TRAIN.DATA.PREFETCH = False
 CFG.TRAIN.DATA.SHUFFLE = True
 CFG.TRAIN.DATA.NUM_WORKERS = 2
@@ -95,7 +108,7 @@ CFG.VAL.DATA = EasyDict()
 # read data
 CFG.VAL.DATA.DIR = "datasets/" + CFG.DATASET_NAME
 # dataloader args, optional
-CFG.VAL.DATA.BATCH_SIZE = 16
+CFG.VAL.DATA.BATCH_SIZE = 8
 CFG.VAL.DATA.PREFETCH = False
 CFG.VAL.DATA.SHUFFLE = False
 CFG.VAL.DATA.NUM_WORKERS = 2
@@ -109,7 +122,7 @@ CFG.TEST.DATA = EasyDict()
 # read data
 CFG.TEST.DATA.DIR = "datasets/" + CFG.DATASET_NAME
 # dataloader args, optional
-CFG.TEST.DATA.BATCH_SIZE = 16
+CFG.TEST.DATA.BATCH_SIZE = 8
 CFG.TEST.DATA.PREFETCH = False
 CFG.TEST.DATA.SHUFFLE = False
 CFG.TEST.DATA.NUM_WORKERS = 2
